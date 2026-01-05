@@ -20,11 +20,11 @@ Sistema de demostración del Perfil Formador UNAM - una aplicación integral par
 - Success criteria: Cada rol ve únicamente las funcionalidades que le corresponden y puede alternar entre perfiles de prueba
 
 **Construcción del Perfil Formador (Vista Profesor)**
-- Functionality: Interfaz estructurada en 8 secciones para capturar información académica, con capacidad de agregar ítems, subir evidencias y enviar a revisión
-- Purpose: Validar que el profesor puede construir progresivamente su perfil académico integral de manera ordenada
+- Functionality: Interfaz estructurada en 8 secciones para capturar información académica, con capacidad de agregar ítems, editar elementos existentes, subir evidencias múltiples mediante drag & drop o selección tradicional, y enviar a revisión
+- Purpose: Validar que el profesor puede construir progresivamente su perfil académico integral de manera ordenada con formularios contextuales según el tipo de sección
 - Trigger: Profesor accede a su perfil y selecciona una sección
-- Progression: Selección de sección → Captura de ítems → Carga de evidencias → Envío a revisión → Espera de validación
-- Success criteria: Todas las 8 secciones son navegables, permiten agregar contenido, gestionar estados (borrador, en revisión, observada, validada)
+- Progression: Selección de sección → Captura de ítems con campos específicos → Edición si es necesario → Carga de múltiples evidencias → Envío a revisión → Espera de validación
+- Success criteria: Todas las 8 secciones son navegables, permiten agregar/editar contenido con formularios contextuales, gestión múltiple de evidencias con drag & drop, eliminación individual de archivos, gestionar estados (borrador, en revisión, observada, validada)
 
 **Validación académica (Vista Evaluador)**
 - Functionality: Panel de revisión donde el evaluador puede ver perfiles pendientes, revisar secciones enviadas, aprobar, rechazar u observar ítems individuales
@@ -34,11 +34,11 @@ Sistema de demostración del Perfil Formador UNAM - una aplicación integral par
 - Success criteria: Evaluador puede aprobar/rechazar secciones completas, dejar observaciones detalladas, y los cambios se reflejan en tiempo real
 
 **Gestión de evidencias documentales**
-- Functionality: Sistema de carga, almacenamiento y visualización de documentos PDF e imágenes asociados a cada ítem del perfil
-- Purpose: Validar el control documental interno sin dependencias externas
-- Trigger: Profesor agrega un ítem y selecciona "Adjuntar evidencia"
-- Progression: Selección de archivo → Validación de formato → Carga simulada → Visualización en lista → Acceso para evaluador
-- Success criteria: Archivos se asocian correctamente a ítems, son visibles para evaluadores, y se puede simular descarga/visualización
+- Functionality: Sistema robusto de carga, almacenamiento y visualización de documentos PDF e imágenes asociados a cada ítem del perfil con soporte para drag & drop, carga múltiple, eliminación individual y vista previa
+- Purpose: Validar el control documental interno sin dependencias externas con una experiencia de usuario fluida y moderna
+- Trigger: Profesor agrega un ítem y selecciona "Adjuntar evidencia" o arrastra archivos a la zona de carga
+- Progression: Selección de archivo(s) o arrastre → Validación de formato y tamaño → Carga simulada → Visualización en lista con metadatos → Acceso para evaluador → Posibilidad de eliminar individualmente
+- Success criteria: Archivos múltiples se asocian correctamente a ítems, son visibles para evaluadores, se puede simular descarga/visualización, eliminación individual funciona correctamente, drag & drop es intuitivo y responsivo
 
 **Panel administrativo (Vista Administrador)**
 - Functionality: Dashboard con métricas del sistema, gestión de usuarios, visualización de bitácora de auditoría y estadísticas generales
@@ -62,11 +62,11 @@ Sistema de demostración del Perfil Formador UNAM - una aplicación integral par
 - Success criteria: Estados son consistentes, cambios quedan registrados con timestamp y usuario, bitácora es consultable
 
 **Secciones estructuradas del Perfil Formador**
-- Functionality: 8 secciones predefinidas que modelan la tabla institucional: Formación académica, Trayectoria docente, Antecedentes académicos, Difusión cultural, Labor administrativa, Antigüedad, Formación de personal
-- Purpose: Validar la estructura completa del modelo de evaluación propuesto
+- Functionality: 8 secciones predefinidas que modelan la tabla institucional con formularios contextuales y campos específicos: Formación académica (con grado obtenido y cédula), Trayectoria docente (con nivel académico y horas), Investigación (con tipo de producción y ISBN), Antecedentes académicos, Difusión cultural, Labor administrativa, Antigüedad, Formación de personal
+- Purpose: Validar la estructura completa del modelo de evaluación propuesto con captura inteligente de datos específicos por tipo de sección
 - Trigger: Navegación dentro del perfil del profesor
-- Progression: Vista general de secciones → Selección → Captura detallada → Revisión → Validación
-- Success criteria: Las 8 secciones están implementadas con campos apropiados, iconografía distintiva, y flujos independientes de validación
+- Progression: Vista general de secciones → Selección → Captura detallada con formularios contextuales → Edición de elementos → Revisión → Validación
+- Success criteria: Las 8 secciones están implementadas con campos apropiados según el tipo, iconografía distintiva, flujos independientes de validación, y formularios que se adaptan al contexto de cada sección
 
 ## Edge Case Handling
 
@@ -77,6 +77,11 @@ Sistema de demostración del Perfil Formador UNAM - una aplicación integral par
 - **Sesión sin datos**: Sistema crea datos de demostración automáticamente si no existen perfiles previos
 - **Cambio de rol durante edición**: Al cambiar de rol, se guarda automáticamente cualquier cambio pendiente
 - **Límite de evidencias**: Control de tamaño y cantidad de archivos para evitar sobrecarga (máximo 5 MB por archivo)
+- **Archivos inválidos**: Validación de tipos de archivo permitidos (PDF, JPG, PNG) con mensajes de error específicos
+- **Carga múltiple**: Sistema procesa múltiples archivos simultáneamente y reporta errores individuales si alguno falla
+- **Edición con evidencias**: Al editar un elemento, se preservan las evidencias ya adjuntadas
+- **Eliminación de elementos**: Confirmación visual antes de eliminar elementos con evidencias asociadas
+- **Drag & drop en móvil**: Zona de carga se adapta para dispositivos táctiles manteniendo la funcionalidad de selección tradicional
 
 ## Design Direction
 

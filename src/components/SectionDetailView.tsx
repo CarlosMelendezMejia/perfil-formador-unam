@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -7,8 +7,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { StatusBadge } from './StatusBadge'
-import { ArrowLeft, Plus, Upload, FileText, Trash, CheckCircle, Warning } from '@phosphor-icons/react'
+import { ArrowLeft, Plus, Upload, FileText, Trash, CheckCircle, Warning, X, Pencil, DownloadSimple } from '@phosphor-icons/react'
 import type { PerfilSeccion, Perfil, Item, Evidencia } from '@/types'
 import { formatDate, formatFileSize, generateId } from '@/lib/helpers'
 import { toast } from 'sonner'
@@ -22,6 +23,10 @@ interface SectionDetailViewProps {
 
 export function SectionDetailView({ seccion, perfil, onBack, onUpdate }: SectionDetailViewProps) {
   const [isAddingItem, setIsAddingItem] = useState(false)
+  const [editingItem, setEditingItem] = useState<Item | null>(null)
+  const [dragActive, setDragActive] = useState<string | null>(null)
+  const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({})
+  
   const [newItem, setNewItem] = useState<Partial<Item>>({
     titulo: '',
     descripcion: '',
@@ -34,38 +39,7 @@ export function SectionDetailView({ seccion, perfil, onBack, onUpdate }: Section
   const canEdit = seccion.estado === 'BORRADOR' || seccion.estado === 'OBSERVADA'
   const canSubmit = canEdit && seccion.items.length > 0 && seccion.items.every(i => i.evidencias.length > 0)
   
-  const handleAddItem = () => {
-    if (!newItem.titulo || !newItem.descripcion) {
-      toast.error('El título y la descripción son obligatorios')
-      return
-    }
-    
-    const item: Item = {
-      id: generateId('item'),
-      perfilSeccionId: seccion.id,
-      titulo: newItem.titulo!,
-      descripcion: newItem.descripcion!,
-      institucion: newItem.institucion,
-      fechaInicio: newItem.fechaInicio,
-      fechaFin: newItem.fechaFin,
-      datos: newItem.datos || {},
-      estado: 'BORRADOR',
-      evidencias: [],
-      fechaCreacion: new Date().toISOString()
-    }
-    
-    const updatedSeccion = {
-      ...seccion,
-      items: [...seccion.items, item]
-    }
-    
-    const updatedPerfil = {
-      ...perfil,
-      secciones: perfil.secciones.map(s => s.id === seccion.id ? updatedSeccion : s)
-    }
-    
-    onUpdate(updatedPerfil)
-    setIsAddingItem(false)
+  const resetForm = () => {
     setNewItem({
       titulo: '',
       descripcion: '',
@@ -74,19 +48,142 @@ export function SectionDetailView({ seccion, perfil, onBack, onUpdate }: Section
       fechaFin: '',
       datos: {}
     })
-    toast.success('Elemento agregado correctamente')
+    setEditingItem(null)
   }
-  
-  const handleFileUpload = (itemId: string, event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-    
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('El archivo no debe superar 5 MB')
+
+  const handleOpenEdit = (item: Item) => {
+    setEditingItem(item)
+    setNewItem({
+      titulo: item.titulo,
+      descripcion: item.descripcion,
+      institucion: item.institucion,
+      fechaInicio: item.fechaInicio,
+      fechaFin: item.fechaFin,
+      datos: item.datos
+    })
+    setIsAddingItem(true)
+  }
+
+  const handleAddItem = () => {
+    if (!newItem.titulo || !newItem.descripcion) {
+      toast.error('El título y la descripción son obligatorios')
       return
     }
     
-    const evidencia: Evidencia = {
+    if (editingItem) {
+      const updatedItem: Item = {
+        ...editingItem,
+        titulo: newItem.titulo!,
+        descripcion: newItem.descripcion!,
+        institucion: newItem.institucion,
+        fechaInicio: newItem.fechaInicio,
+        fechaFin: newItem.fechaFin,
+        datos: newItem.datos || {}
+      }
+      
+      const updatedSeccion = {
+        ...seccion,
+        items: seccion.items.map(item => item.id === editingItem.id ? updatedItem : item)
+      }
+      
+      const updatedPerfil = {
+        ...perfil,
+        secciones: perfil.secciones.map(s => s.id === seccion.id ? updatedSeccion : s)
+      }
+      
+      onUpdate(updatedPerfil)
+      setIsAddingItem(false)
+      resetForm()
+      toast.success('Elemento actualizado correctamente')
+    } else {
+      const item: Item = {
+        id: generateId('item'),
+        perfilSeccionId: seccion.id,
+        titulo: newItem.titulo!,
+        descripcion: newItem.descripcion!,
+        institucion: newItem.institucion,
+        fechaInicio: newItem.fechaInicio,
+        fechaFin: newItem.fechaFin,
+        datos: newItem.datos || {},
+        estado: 'BORRADOR',
+        evidencias: [],
+        fechaCreacion: new Date().toISOString()
+      }
+      
+      const updatedSeccion = {
+        ...seccion,
+        items: [...seccion.items, item]
+      }
+      
+      const updatedPerfil = {
+        ...perfil,
+        secciones: perfil.secciones.map(s => s.id === seccion.id ? updatedSeccion : s)
+      }
+      
+      onUpdate(updatedPerfil)
+      setIsAddingItem(false)
+      resetForm()
+      toast.success('Elemento agregado correctamente')
+    }
+  }
+  
+  const handleFileUpload = (itemId: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+    
+    processFiles(itemId, Array.from(files))
+    event.target.value = ''
+  }
+
+  const handleDrop = (itemId: string, event: React.DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setDragActive(null)
+    
+    const files = event.dataTransfer.files
+    if (files && files.length > 0) {
+      processFiles(itemId, Array.from(files))
+    }
+  }
+
+  const handleDragOver = (event: React.DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+
+  const handleDragEnter = (itemId: string, event: React.DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setDragActive(itemId)
+  }
+
+  const handleDragLeave = (event: React.DragEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setDragActive(null)
+  }
+
+  const processFiles = (itemId: string, files: File[]) => {
+    const validFiles: File[] = []
+    
+    for (const file of files) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error(`${file.name} supera el límite de 5 MB`)
+        continue
+      }
+      
+      const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png']
+      if (!validTypes.includes(file.type)) {
+        toast.error(`${file.name} no es un tipo de archivo válido (PDF, JPG, PNG)`)
+        continue
+      }
+      
+      validFiles.push(file)
+    }
+    
+    if (validFiles.length === 0) return
+    
+    const evidencias: Evidencia[] = validFiles.map(file => ({
       id: generateId('ev'),
       itemId,
       nombre: file.name,
@@ -94,13 +191,13 @@ export function SectionDetailView({ seccion, perfil, onBack, onUpdate }: Section
       tamano: file.size,
       rutaArchivo: URL.createObjectURL(file),
       fechaCarga: new Date().toISOString()
-    }
+    }))
     
     const updatedSeccion = {
       ...seccion,
       items: seccion.items.map(item =>
         item.id === itemId
-          ? { ...item, evidencias: [...item.evidencias, evidencia] }
+          ? { ...item, evidencias: [...item.evidencias, ...evidencias] }
           : item
       )
     }
@@ -111,8 +208,26 @@ export function SectionDetailView({ seccion, perfil, onBack, onUpdate }: Section
     }
     
     onUpdate(updatedPerfil)
-    toast.success('Evidencia adjuntada correctamente')
-    event.target.value = ''
+    toast.success(`${validFiles.length} ${validFiles.length === 1 ? 'evidencia adjuntada' : 'evidencias adjuntadas'}`)
+  }
+
+  const handleDeleteEvidence = (itemId: string, evidenciaId: string) => {
+    const updatedSeccion = {
+      ...seccion,
+      items: seccion.items.map(item =>
+        item.id === itemId
+          ? { ...item, evidencias: item.evidencias.filter(ev => ev.id !== evidenciaId) }
+          : item
+      )
+    }
+    
+    const updatedPerfil = {
+      ...perfil,
+      secciones: perfil.secciones.map(s => s.id === seccion.id ? updatedSeccion : s)
+    }
+    
+    onUpdate(updatedPerfil)
+    toast.success('Evidencia eliminada')
   }
   
   const handleDeleteItem = (itemId: string) => {
@@ -197,18 +312,21 @@ export function SectionDetailView({ seccion, perfil, onBack, onUpdate }: Section
               </p>
               <div className="flex gap-2">
                 {canEdit && (
-                  <Dialog open={isAddingItem} onOpenChange={setIsAddingItem}>
+                  <Dialog open={isAddingItem} onOpenChange={(open) => {
+                    setIsAddingItem(open)
+                    if (!open) resetForm()
+                  }}>
                     <DialogTrigger asChild>
                       <Button>
                         <Plus size={20} className="mr-2" />
                         Agregar Elemento
                       </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
+                    <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                       <DialogHeader>
-                        <DialogTitle>Nuevo Elemento</DialogTitle>
+                        <DialogTitle>{editingItem ? 'Editar Elemento' : 'Nuevo Elemento'}</DialogTitle>
                         <DialogDescription>
-                          Agrega un nuevo elemento a la sección {seccion.seccion.nombre}
+                          {editingItem ? 'Modifica' : 'Agrega'} un elemento {editingItem ? 'en' : 'a'} la sección {seccion.seccion.nombre}
                         </DialogDescription>
                       </DialogHeader>
                       <div className="space-y-4 py-4">
@@ -260,13 +378,118 @@ export function SectionDetailView({ seccion, perfil, onBack, onUpdate }: Section
                             />
                           </div>
                         </div>
+                        
+                        {seccion.seccion.id === 'sec-2' && (
+                          <div className="space-y-4 pt-4 border-t">
+                            <h4 className="font-medium text-sm">Información Adicional - Formación Académica</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="gradoObtenido">Grado Obtenido</Label>
+                                <Select
+                                  value={newItem.datos?.gradoObtenido || ''}
+                                  onValueChange={(value) => setNewItem({ ...newItem, datos: { ...newItem.datos, gradoObtenido: value } })}
+                                >
+                                  <SelectTrigger id="gradoObtenido">
+                                    <SelectValue placeholder="Seleccionar grado" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Licenciatura">Licenciatura</SelectItem>
+                                    <SelectItem value="Especialidad">Especialidad</SelectItem>
+                                    <SelectItem value="Maestría">Maestría</SelectItem>
+                                    <SelectItem value="Doctorado">Doctorado</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="cedula">Cédula Profesional</Label>
+                                <Input
+                                  id="cedula"
+                                  value={newItem.datos?.cedula || ''}
+                                  onChange={(e) => setNewItem({ ...newItem, datos: { ...newItem.datos, cedula: e.target.value } })}
+                                  placeholder="Número de cédula"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {seccion.seccion.id === 'sec-3' && (
+                          <div className="space-y-4 pt-4 border-t">
+                            <h4 className="font-medium text-sm">Información Adicional - Docencia</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="nivelAcademico">Nivel Académico</Label>
+                                <Select
+                                  value={newItem.datos?.nivelAcademico || ''}
+                                  onValueChange={(value) => setNewItem({ ...newItem, datos: { ...newItem.datos, nivelAcademico: value } })}
+                                >
+                                  <SelectTrigger id="nivelAcademico">
+                                    <SelectValue placeholder="Seleccionar nivel" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Licenciatura">Licenciatura</SelectItem>
+                                    <SelectItem value="Posgrado">Posgrado</SelectItem>
+                                    <SelectItem value="Educación Continua">Educación Continua</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="horasSemana">Horas por Semana</Label>
+                                <Input
+                                  id="horasSemana"
+                                  type="number"
+                                  value={newItem.datos?.horasSemana || ''}
+                                  onChange={(e) => setNewItem({ ...newItem, datos: { ...newItem.datos, horasSemana: parseInt(e.target.value) || 0 } })}
+                                  placeholder="Ej: 6"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {seccion.seccion.id === 'sec-4' && (
+                          <div className="space-y-4 pt-4 border-t">
+                            <h4 className="font-medium text-sm">Información Adicional - Investigación</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label htmlFor="tipoProduccion">Tipo de Producción</Label>
+                                <Select
+                                  value={newItem.datos?.tipoProduccion || ''}
+                                  onValueChange={(value) => setNewItem({ ...newItem, datos: { ...newItem.datos, tipoProduccion: value } })}
+                                >
+                                  <SelectTrigger id="tipoProduccion">
+                                    <SelectValue placeholder="Seleccionar tipo" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="Artículo">Artículo</SelectItem>
+                                    <SelectItem value="Libro">Libro</SelectItem>
+                                    <SelectItem value="Capítulo de Libro">Capítulo de Libro</SelectItem>
+                                    <SelectItem value="Proyecto">Proyecto</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-2">
+                                <Label htmlFor="isbn">ISBN/ISSN</Label>
+                                <Input
+                                  id="isbn"
+                                  value={newItem.datos?.isbn || ''}
+                                  onChange={(e) => setNewItem({ ...newItem, datos: { ...newItem.datos, isbn: e.target.value } })}
+                                  placeholder="Número de identificación"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsAddingItem(false)}>
+                        <Button variant="outline" onClick={() => {
+                          setIsAddingItem(false)
+                          resetForm()
+                        }}>
                           Cancelar
                         </Button>
                         <Button onClick={handleAddItem}>
-                          Agregar
+                          {editingItem ? 'Actualizar' : 'Agregar'}
                         </Button>
                       </DialogFooter>
                     </DialogContent>
@@ -305,13 +528,24 @@ export function SectionDetailView({ seccion, perfil, onBack, onUpdate }: Section
                       <CardDescription>{item.descripcion}</CardDescription>
                     </div>
                     {canEdit && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteItem(item.id)}
-                      >
-                        <Trash size={18} />
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleOpenEdit(item)}
+                          title="Editar elemento"
+                        >
+                          <Pencil size={18} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteItem(item.id)}
+                          title="Eliminar elemento"
+                        >
+                          <Trash size={18} />
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </CardHeader>
@@ -340,6 +574,47 @@ export function SectionDetailView({ seccion, perfil, onBack, onUpdate }: Section
                     </div>
                   )}
                   
+                  {item.datos && Object.keys(item.datos).length > 0 && (
+                    <div className="grid grid-cols-2 gap-4 p-4 rounded-lg bg-muted/30 border">
+                      {item.datos.gradoObtenido && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Grado Obtenido</Label>
+                          <p className="text-sm mt-1">{item.datos.gradoObtenido}</p>
+                        </div>
+                      )}
+                      {item.datos.cedula && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Cédula Profesional</Label>
+                          <p className="text-sm mt-1">{item.datos.cedula}</p>
+                        </div>
+                      )}
+                      {item.datos.nivelAcademico && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Nivel Académico</Label>
+                          <p className="text-sm mt-1">{item.datos.nivelAcademico}</p>
+                        </div>
+                      )}
+                      {item.datos.horasSemana && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Horas por Semana</Label>
+                          <p className="text-sm mt-1">{item.datos.horasSemana}</p>
+                        </div>
+                      )}
+                      {item.datos.tipoProduccion && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground uppercase tracking-wide">Tipo de Producción</Label>
+                          <p className="text-sm mt-1">{item.datos.tipoProduccion}</p>
+                        </div>
+                      )}
+                      {item.datos.isbn && (
+                        <div>
+                          <Label className="text-xs text-muted-foreground uppercase tracking-wide">ISBN/ISSN</Label>
+                          <p className="text-sm mt-1">{item.datos.isbn}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
                   {item.observaciones && (
                     <Alert className="bg-info/10 border-info/20">
                       <Warning className="h-4 w-4 text-info" weight="fill" />
@@ -360,8 +635,10 @@ export function SectionDetailView({ seccion, perfil, onBack, onUpdate }: Section
                             <Upload size={16} className="mr-2" />
                             Adjuntar
                             <input
+                              ref={(el) => { fileInputRefs.current[item.id] = el }}
                               type="file"
                               accept=".pdf,.jpg,.jpeg,.png"
+                              multiple
                               onChange={(e) => handleFileUpload(item.id, e)}
                               className="hidden"
                             />
@@ -370,16 +647,70 @@ export function SectionDetailView({ seccion, perfil, onBack, onUpdate }: Section
                       )}
                     </div>
                     
+                    {canEdit && (
+                      <div
+                        className={`border-2 border-dashed rounded-lg p-6 transition-colors ${
+                          dragActive === item.id
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border bg-muted/20'
+                        }`}
+                        onDrop={(e) => handleDrop(item.id, e)}
+                        onDragOver={handleDragOver}
+                        onDragEnter={(e) => handleDragEnter(item.id, e)}
+                        onDragLeave={handleDragLeave}
+                      >
+                        <div className="flex flex-col items-center gap-2 text-center">
+                          <Upload size={32} className="text-muted-foreground" />
+                          <div>
+                            <p className="text-sm font-medium">
+                              Arrastra archivos aquí o haz clic en "Adjuntar"
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              PDF, JPG, PNG hasta 5 MB por archivo
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
                     {item.evidencias.length > 0 ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {item.evidencias.map((ev) => (
-                          <div key={ev.id} className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
-                            <FileText size={20} className="text-muted-foreground shrink-0" />
+                          <div key={ev.id} className="flex items-start gap-3 p-3 rounded-lg border bg-card group hover:border-primary/50 transition-colors">
+                            <FileText size={24} className="text-primary shrink-0 mt-0.5" weight="fill" />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium truncate">{ev.nombre}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {formatFileSize(ev.tamano)}
-                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <p className="text-xs text-muted-foreground">
+                                  {formatFileSize(ev.tamano)}
+                                </p>
+                                <span className="text-xs text-muted-foreground">•</span>
+                                <p className="text-xs text-muted-foreground">
+                                  {new Date(ev.fechaCarga).toLocaleDateString('es-MX')}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => window.open(ev.rutaArchivo, '_blank')}
+                                title="Ver documento"
+                              >
+                                <DownloadSimple size={16} />
+                              </Button>
+                              {canEdit && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                                  onClick={() => handleDeleteEvidence(item.id, ev.id)}
+                                  title="Eliminar evidencia"
+                                >
+                                  <X size={16} />
+                                </Button>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -387,7 +718,7 @@ export function SectionDetailView({ seccion, perfil, onBack, onUpdate }: Section
                     ) : (
                       <Alert>
                         <AlertDescription className="text-sm text-muted-foreground">
-                          No hay evidencias adjuntadas. Debes adjuntar al menos un documento.
+                          No hay evidencias adjuntadas. Debes adjuntar al menos un documento para enviar esta sección a revisión.
                         </AlertDescription>
                       </Alert>
                     )}
